@@ -1,0 +1,15 @@
+.fromgit
+
+deployment/postgres
+
+/venv/
+/media/
+__pycache__
+*.pyc
+.idea/*
+.vscode
+
+.DS_Store
+
+file_service/local_settings.py
+docs/_build

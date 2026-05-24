@@ -1,0 +1,797 @@
+openapi: 3.0.2
+info:
+  title: ''
+  version: ''
+paths:
+  /api/v1.0/files/:
+    get:
+      summary: 'Get list of all avaliable files'
+      description: >
+        Returns a list of all files avaliable on fileservice for
+        current user
+        <br>
+        (automatical filtering may be applied while using ABAC)
+      tags:
+        - Files
+      operationId: listFiles
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/File'
+          description: ''
+    post:
+      summary: Upload the file
+      tags:
+          - Files
+      operationId: createFile
+      parameters: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+              required:
+              - file
+              - name
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: 'Uploaded file'
+  /api/v1.0/files/{id}/:
+    get:
+      summary: Get file object
+      tags:
+          - Files
+      operationId: retrieveFile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A UUID string identifying this file.
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: ''
+    patch:
+      summary: Update file object
+      tags:
+        - Files
+      operationId: partial_updateFile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A UUID string identifying this file.
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                owner:
+                  type: integer
+                  maximum: 2147483647
+                  minimum: -2147483648
+                  nullable: true
+                file:
+                  type: string
+                filename:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                origin_filename:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                ready:
+                  type: boolean
+                metadata:
+                  type: object
+                  nullable: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: ''
+    delete:
+      summary: Delete file
+      tags:
+          - Files
+      operationId: destroyFile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A UUID string identifying this file.
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+  /api/v1.0/extensions/:
+    get:
+      summary: List extensions allowed for upload
+      description: >
+        File extentions list is used on first stage validation of uploaded files. <br>
+        Keep it empty or add wildcars extention `*` if you want any filetype be allowed
+      tags:
+        - File extentions
+      operationId: listFileExtensions
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Extention'
+          description: 'List of extentions returned'
+    post:
+      summary: Adding new file extension to allowed list
+      tags:
+          - File extentions
+      operationId: createFileExtension
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                extension:
+                  type: string
+                  maxLength: 255
+              required:
+              - extension
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extention'
+          description: 'Extension created'
+  /api/v1.0/extensions/{id}/:
+    get:
+      summary: Get extension from list
+      tags:
+        - File extentions
+      operationId: retrieveFileExtension
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file extension.
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extention'
+          description: 'Extension object'
+    patch:
+      summary: Update extension
+      tags:
+        - File extentions
+      operationId: partial_updateFileExtension
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file extension.
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                extension:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extention'
+          description: 'Extension object was updated'
+    delete:
+      summary: Remove extension from allowed
+      description: >
+        After removing extension from list all existing files are kept. <br>
+        Only new file will be resricted from upload
+      tags:
+        - File extentions
+      operationId: destroyFileExtension
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file extension.
+        schema:
+          type: string
+      responses:
+        '204':
+          description: 'Extension removed'
+  /api/v1.0/types/:
+    get:
+      tags:
+        - File types
+      operationId: listFileTypes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Type'
+          description: ''
+    post:
+      tags:
+        - File types
+      operationId: createFileType
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                id:
+                  type: string
+                  maxLength: 32
+                mime:
+                  type: string
+              required:
+              - id
+              - mime
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Type'
+          description: ''
+  /api/v1.0/types/{id}/:
+    get:
+      tags:
+        - File types
+      operationId: retrieveFileType
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique value identifying this file type.
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Type'
+          description: ''
+    patch:
+      tags:
+        - File types
+      operationId: partial_updateFileType
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique value identifying this file type.
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                id:
+                  type: string
+                  maxLength: 32
+                mime:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Type'
+          description: ''
+    delete:
+      tags:
+        - File types
+      operationId: destroyFileType
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique value identifying this file type.
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+  /api/v1.0/templates/:
+    get:
+      summary: List all avaliable file templates
+      tags:
+        - Templates
+      operationId: listFileTemplates
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+          description: 'List of template objects'
+    post:
+      summary: Create new file template
+      tags:
+          - Templates
+      operationId: createFileTemplate
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                alias:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                name:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                filename_template:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                body_template:
+                  type: string
+              required:
+              - body_template
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+          description: 'Template object created'
+  /api/v1.0/templates/preview:
+    post:
+      summary: Preview template rendering without save
+      tags:
+        - Templates
+      operationId: previewFileTemplate
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                alias:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                name:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                filename_template:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                body_template:
+                  type: string
+                example_data:
+                  type: object
+                format:
+                  type: string
+                  enum:
+                    - PNG
+                    - PDF
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: 'Template object'
+  /api/v1.0/templates/{id}/render:
+    post:
+      summary: Render template to file
+      tags:
+        - Templates
+      operationId: renderFileTemplate
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file template.
+        schema:
+          type: string
+      - name: preview
+        in: query
+        description: Flag for previewing template with example data
+        schema:
+          type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                data:
+                  type: object
+                  nullable: true
+                  maxLength: 128
+                format:
+                  type: string
+                  enum:
+                    - PNG
+                    - PDF
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: 'Template object'
+  /api/v1.0/templates/{id}/:
+    get:
+      summary: Get template object
+      tags:
+        - Templates
+      operationId: retrieveFileTemplate
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file template.
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+          description: 'Template object'
+    patch:
+      summary: Update template
+      description: >
+        Updates only Template object. All previous files created from this Template will not change.
+      tags:
+        - Templates
+      operationId: partial_updateFileTemplate
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file template.
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                alias:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                name:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                filename_template:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                body_template:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+          description: ''
+    delete:
+      summary: Delete template
+      description: >
+        Only Template object will be removed. All files created from this Template are kept.
+      tags:
+        - Templates
+      operationId: destroyFileTemplate
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique integer value identifying this file template.
+        schema:
+          type: string
+      responses:
+        '204':
+          description: 'Template removed'
+  /api/v1.0/plugins/:
+    get:
+      summary: List all plugins installed
+      tags:
+        - Plugins
+      operationId: listTroodPluginModels
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties:
+                    id:
+                      type: string
+                      maxLength: 128
+                    name:
+                      type: string
+                      maxLength: 128
+                    version:
+                      type: string
+                      maxLength: 32
+                    config:
+                      type: string
+                  required:
+                  - id
+                  - name
+                  - version
+                  - config
+          description: ''
+  /api/v1.0/plugins/{id}/:
+    get:
+      summary: Get plugin settings
+      tags:
+        - Plugins
+      operationId: retrieveTroodPluginModel
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique value identifying this trood plugin model.
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  id:
+                    type: string
+                    maxLength: 128
+                  name:
+                    type: string
+                    maxLength: 128
+                  version:
+                    type: string
+                    maxLength: 32
+                  config:
+                    type: string
+                required:
+                - id
+                - name
+                - version
+                - config
+          description: ''
+    patch:
+      summary: Update plugin settings
+      tags:
+        - Plugins
+      operationId: partial_updateTroodPluginModel
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: A unique value identifying this trood plugin model.
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                id:
+                  type: string
+                  maxLength: 128
+                name:
+                  type: string
+                  maxLength: 128
+                version:
+                  type: string
+                  maxLength: 32
+                config:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  id:
+                    type: string
+                    maxLength: 128
+                  name:
+                    type: string
+                    maxLength: 128
+                  version:
+                    type: string
+                    maxLength: 32
+                  config:
+                    type: string
+                required:
+                - id
+                - name
+                - version
+                - config
+          description: ''
+  /api/v1.0/files/from_template/:
+    post:
+      deprecated: true
+      summary: Create new file from template
+      tags:
+        - Files
+      operationId: from_templateFile
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                owner:
+                  type: integer
+                  maximum: 2147483647
+                  minimum: -2147483648
+                  nullable: true
+                file:
+                  type: string
+                filename:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                origin_filename:
+                  type: string
+                  nullable: true
+                  maxLength: 128
+                ready:
+                  type: boolean
+                metadata:
+                  type: object
+                  nullable: true
+              required:
+              - file
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: 'File created'
+
+components:
+  schemas:
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        owner:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        created:
+          type: string
+          format: date-time
+          readOnly: true
+        file:
+          type: string
+        file_url:
+          type: string
+          readOnly: true
+        filename:
+          type: string
+          nullable: true
+          maxLength: 128
+        origin_filename:
+          type: string
+          nullable: true
+          maxLength: 128
+        type:
+          type: string
+          readOnly: true
+        mimetype:
+          type: string
+          readOnly: true
+        size:
+          type: integer
+          readOnly: true
+        ready:
+          type: boolean
+        metadata:
+          type: object
+          nullable: true
+        deleted:
+          type: boolean
+        access:
+          type: string
+          maxLength: 10
+        tags:
+          type: object
+          nullable: true
+    Type:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 32
+        mime:
+          type: string
+    Extention:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        extension:
+          type: string
+          maxLength: 255
+    Template:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        alias:
+          type: string
+          nullable: true
+          maxLength: 128
+        name:
+          type: string
+          nullable: true
+          maxLength: 128
+        filename_template:
+          type: string
+          nullable: true
+          maxLength: 128
+        body_template:
+          type: string
+        example_data:
+          type: object

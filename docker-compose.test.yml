@@ -1,0 +1,30 @@
+version: '3.7'
+
+services:
+  db:
+    image: postgres:9.5
+    environment:
+      - POSTGRES_DB=fileservice_test
+      - POSTGRES_USER=fileservice
+      - POSTGRES_PASSWORD=fileservice
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fileservice -d fileservice_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  fileservice:
+    build: 
+      context: .
+      dockerfile: deployment/Dockerfile
+    environment:
+      - DJANGO_CONFIGURATION=Development
+      - DATABASE_URL=postgres://fileservice:fileservice@db:5432/fileservice_test
+      - AUTH_TYPE=NONE
+      - SECRET_KEY=test_secret_key
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/home/src
+    command: pytest

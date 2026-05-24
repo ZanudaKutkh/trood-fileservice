@@ -1,0 +1,26 @@
+version: "2.2"
+
+services:
+  fileservice:
+    build:
+      context: ../
+      dockerfile: deployment/Dockerfile
+    container_name: fileservice
+    environment:
+      DJANGO_CONFIGURATION: Development
+      RAVEN_CONFIG_DSN: "YOUR_DSN_HERE"
+      RAVEN_CONFIG_RELEASE: "dev"
+      ENABLE_RAVEN: "False"
+
+  fileservice_postgres:
+    image: postgres:9.5
+    container_name: postgres.fileservice
+    volumes:
+      - ./postgres/${CONTAINER_NAME}/data:/var/lib/postgresql/data
+      - ./postgres/${CONTAINER_NAME}/conf:/etc/postgresql
+      - ./postgres/${CONTAINER_NAME}/logs:/var/log/postgresql
+    environment:
+      LC_ALL: C.UTF-8
+      POSTGRES_DB: fileservice
+      POSTGRES_USER: fileservice
+      POSTGRES_PASSWORD: fileservice
