@@ -2,9 +2,15 @@ import os
 import magic
 import uuid
 import mimetypes
-
 import logging
+from datetime import datetime
+
 from slugify import slugify
+from jsonfield import JSONField
+from django.db import models
+from django.conf import settings
+from django.utils.translation import gettext_lazy as _
+from rest_framework.exceptions import ValidationError
 
 logger = logging.getLogger('file_service')
 
@@ -73,25 +79,6 @@ class FileType(BaseModel):
 class File(BaseModel):
     """
     File model with overriden save() function to customize saving behavior.
-
-    It contains:
-    id                  id of the file in form of UUID.
-    ready               file descriptor(true or false).
-    deleted             deleted status of the file(true or false).
-    created             date of creation.
-    file                file name(which has a unique name).
-    origin_filename     original file name.
-    filename            name of the file
-    size                size of the file.
-    metadata            metadata.
-    mimetype            MIME type of the file.
-    access              file access permission.
-                        It contains 3 different permission:
-                            -Private
-                            -Protected
-                            -Public
-    type                type of file.
-    tags                file tages.
     """
     ACCESS_CHOICES = (
         ('PRIVATE', _('Private')),
@@ -110,7 +97,7 @@ class File(BaseModel):
     type = models.ForeignKey(FileType, null=True, blank=True, on_delete=models.SET_NULL)
     mimetype = models.CharField(_('Mimetype'), max_length=128, blank=True, null=True)
     size = models.IntegerField(_('File size'))
-    ready = models.BooleanField(_('Ready'), default=False)
+    ready = models.BooleanField(_('Ready'), default=True)
 
     deleted = models.BooleanField(_('Deleted'), default=False)
 
@@ -134,11 +121,10 @@ class File(BaseModel):
                     self.mimetype, enc = mimetypes.guess_type(self.file.storage.url(self.file.name))
 
                 if not self.mimetype:
-                    # Важно: всегда возвращаем указатель в начало после чтения
+                    # Return pointer to start after magic check
                     self.mimetype = magic.from_buffer(self.file.read(2048), mime=True)
                     self.file.seek(0)
             except Exception as e:
-                # Логируем полную ошибку с Traceback
                 logger.exception("Mimetype detection failed for file %s", self.file.name)
                 self.mimetype, _ = mimetypes.guess_type(self.file.name)
                 if not self.mimetype:
@@ -159,11 +145,7 @@ class FileExtension(BaseModel):
 
 class FileTemplate(BaseModel):
     """
-    File template model, which contains:
-    alias               alias name for file template.
-    name                name or header of the file.
-    filename_template   name of the file template.
-    body_template       contains the body of the file.
+    File template model
     """
     alias = models.CharField(unique=True, max_length=128, null=True)
     name = models.CharField(max_length=128, blank=True, null=True)
@@ -182,11 +164,6 @@ class Tag(BaseModel):
 class FileTextContent(models.Model):
     """
     A model, which contains the content of file text.
-
-    content             body of the text.
-    created             date of creation.
-    source              the id of the file.
-    title               title of the text.
     """
     source = models.ForeignKey(File, on_delete=models.CASCADE)
     content = models.TextField()
