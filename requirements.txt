@@ -37,4 +37,4 @@ pytesseract==0.3.7
 pdf2image==1.16.0
 python-json-logger==2.0.2
 
-trood==1.0.2
+trood==1.0.6

@@ -3,13 +3,10 @@ import magic
 import uuid
 import mimetypes
 
+import logging
 from slugify import slugify
-from datetime import datetime
-from jsonfield import JSONField
-from django.db import models
-from django.conf import settings
-from django.utils.translation import gettext_lazy as _
-from rest_framework.exceptions import ValidationError
+
+logger = logging.getLogger('file_service')
 
 
 def create_unique_filename(instance, filename):
@@ -130,13 +127,22 @@ class File(BaseModel):
             self.size = self.file.size
 
         if not self.mimetype:
-            if settings.STORAGE_TYPE == 'DISK':
-                self.mimetype, enc = mimetypes.guess_type(self.file.path)
-            elif settings.STORAGE_TYPE == 'DO_SPACES':
-                self.mimetype, enc = mimetypes.guess_type(self.file.storage.url(self.file.name))
+            try:
+                if settings.STORAGE_TYPE == 'DISK':
+                    self.mimetype, enc = mimetypes.guess_type(self.file.path)
+                elif settings.STORAGE_TYPE == 'DO_SPACES':
+                    self.mimetype, enc = mimetypes.guess_type(self.file.storage.url(self.file.name))
 
-            if not self.mimetype:
-                self.mimetype = magic.from_buffer(self.file.read(), mime=True)
+                if not self.mimetype:
+                    # Важно: всегда возвращаем указатель в начало после чтения
+                    self.mimetype = magic.from_buffer(self.file.read(2048), mime=True)
+                    self.file.seek(0)
+            except Exception as e:
+                # Логируем полную ошибку с Traceback
+                logger.exception("Mimetype detection failed for file %s", self.file.name)
+                self.mimetype, _ = mimetypes.guess_type(self.file.name)
+                if not self.mimetype:
+                    self.mimetype = 'application/octet-stream'
 
             if self.mimetype:
                 self.type = FileType.objects.filter(mime__contains=self.mimetype).first()
