@@ -1,5 +1,3 @@
-import base64
-import os
 import tempfile
 from django.test.utils import override_settings
 from rest_framework.test import APITestCase, APIClient

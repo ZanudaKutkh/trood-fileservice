@@ -36,7 +36,6 @@ class BaseConfiguration(Configuration):
         'django.contrib.contenttypes',
         'django.contrib.sessions',
         'django.contrib.staticfiles',
-        'raven.contrib.django.raven_compat',
         'storages',
 
         'rest_framework',
@@ -58,7 +57,7 @@ class BaseConfiguration(Configuration):
         'django.contrib.messages.middleware.MessageMiddleware',
     ]
 
-    FILE_GENERATORS = {}
+    FILE_GENERATORS: dict = {}
 
     ROOT_URLCONF = 'file_service.urls'
 
@@ -114,9 +113,9 @@ class BaseConfiguration(Configuration):
     MAX_UPLOAD_SIZE = int(os.environ.get('MAX_UPLOAD_SIZE', 15728640))
 
     # Allowed extensions (comma separated list, e.g. "jpg,png,pdf")
-    ALLOWED_EXTENSIONS = os.environ.get('ALLOWED_EXTENSIONS', '')
-    if ALLOWED_EXTENSIONS:
-        ALLOWED_EXTENSIONS = [ext.strip().lower() for ext in ALLOWED_EXTENSIONS.split(',')]
+    _extensions = os.environ.get('ALLOWED_EXTENSIONS', '')
+    if _extensions:
+        ALLOWED_EXTENSIONS = [ext.strip().lower() for ext in _extensions.split(',')]
     else:
         ALLOWED_EXTENSIONS = []
 
@@ -156,10 +155,6 @@ class BaseConfiguration(Configuration):
     LOGGING = {
         'version': 1,
         'disable_existing_loggers': True,
-        'root': {
-            'level': 'WARNING',
-            'handlers': ['sentry'],
-        },
         'filters': {
             'request_id': {
                 '()': 'file_service.utils.logging_utils.RequestIDFilter',
@@ -176,11 +171,6 @@ class BaseConfiguration(Configuration):
             },
         },
         'handlers': {
-            'sentry': {
-                'level': 'WARNING',
-                'class': 'raven.contrib.django.raven_compat.handlers.SentryHandler',
-                'tags': {'custom-tag': 'x'},
-            },
             'console': {
                 'level': 'DEBUG',
                 'class': 'logging.StreamHandler',
@@ -194,31 +184,27 @@ class BaseConfiguration(Configuration):
                 'handlers': ['console'],
                 'propagate': False,
             },
+            'django.request': {
+                'handlers': ['console'],
+                'level': 'ERROR',
+                'propagate': False,
+            },
+            'django.server': {
+                'handlers': ['console'],
+                'level': 'ERROR',
+                'propagate': False,
+            },
             'file_service': {
                 'level': 'INFO',
-                'handlers': ['console', 'sentry'],
-                'propagate': False,
-            },
-            'raven': {
-                'level': 'DEBUG',
-                'handlers': ['console'],
-                'propagate': False,
-            },
-            'sentry.errors': {
-                'level': 'DEBUG',
                 'handlers': ['console'],
                 'propagate': False,
             },
         },
+        'root': {
+            'level': 'WARNING',
+            'handlers': ['console'],
+        },
     }
-
-    ENABLE_RAVEN = os.environ.get('ENABLE_RAVEN', "False")
-
-    if ENABLE_RAVEN == "True":
-        RAVEN_CONFIG = {
-            'dsn': os.environ.get('RAVEN_CONFIG_DSN'),
-            'release': os.environ.get('RAVEN_CONFIG_RELEASE')
-        }
 
     AUTH_TYPE = os.environ.get('AUTHENTICATION_TYPE')
 
@@ -237,17 +223,15 @@ class BaseConfiguration(Configuration):
            'trood.contrib.django.auth.authentication.TroodTokenAuthentication',
         )
 
-        MIDDLEWARE = MIDDLEWARE + [
-            'trood.contrib.django.auth.middleware.TroodABACMiddleware',
-        ]
+        MIDDLEWARE.append('trood.contrib.django.auth.middleware.TroodABACMiddleware')
 
         REST_FRAMEWORK['DEFAULT_PERMISSION_CLASSES'] = (
             'trood.contrib.django.auth.permissions.TroodABACPermission',
         )
 
-        REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] += (
-            'trood.contrib.django.auth.filter.TroodABACFilterBackend',
-        )
+        _backends = list(REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'])
+        _backends.append('trood.contrib.django.auth.filter.TroodABACFilterBackend')
+        REST_FRAMEWORK['DEFAULT_FILTER_BACKENDS'] = tuple(_backends)
 
     elif AUTH_TYPE == 'NONE':
         REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'] = ()

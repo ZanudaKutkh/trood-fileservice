@@ -51,7 +51,7 @@ def validate_file_extention(value):
 
     # 2. Dynamic restriction via DB
     allowed_extensions = FileExtension.objects.all().values_list('extension', flat=True)
-    if len(allowed_extensions) and not ext in allowed_extensions and "*" not in allowed_extensions:
+    if len(allowed_extensions) and ext not in allowed_extensions and "*" not in allowed_extensions:
         raise ValidationError(_('Unsupported file type'))
 
 
@@ -115,16 +115,17 @@ class File(BaseModel):
 
         if not self.mimetype:
             try:
-                if settings.STORAGE_TYPE == 'DISK':
-                    self.mimetype, enc = mimetypes.guess_type(self.file.path)
-                elif settings.STORAGE_TYPE == 'DO_SPACES':
-                    self.mimetype, enc = mimetypes.guess_type(self.file.storage.url(self.file.name))
+                # 1. Try magic (content-based) first as it is more reliable
+                self.mimetype = magic.from_buffer(self.file.read(2048), mime=True)
+                self.file.seek(0)
 
-                if not self.mimetype:
-                    # Return pointer to start after magic check
-                    self.mimetype = magic.from_buffer(self.file.read(2048), mime=True)
-                    self.file.seek(0)
-            except Exception as e:
+                # 2. Fallback to mimetypes if magic returns generic or failed
+                if not self.mimetype or self.mimetype == 'application/octet-stream':
+                    if settings.STORAGE_TYPE == 'DISK':
+                        self.mimetype, enc = mimetypes.guess_type(self.file.path)
+                    elif settings.STORAGE_TYPE == 'DO_SPACES':
+                        self.mimetype, enc = mimetypes.guess_type(self.file.storage.url(self.file.name))
+            except Exception:
                 logger.exception("Mimetype detection failed for file %s", self.file.name)
                 self.mimetype, _ = mimetypes.guess_type(self.file.name)
                 if not self.mimetype:

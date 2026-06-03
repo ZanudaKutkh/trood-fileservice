@@ -1,6 +1,7 @@
 import time
 import os
 import logging
+import re
 from django.conf import settings
 from django.db import transaction
 from django.core.files.base import ContentFile
@@ -15,7 +16,15 @@ from rest_framework.response import Response
 from django.template import Context
 from django.template import Template as DjangoTemplate
 
+from rest_framework.pagination import PageNumberPagination
+
 logger = logging.getLogger('file_service')
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 def render_file(template, file_format, data, user):
@@ -61,6 +70,15 @@ class FilesViewSet(BaseViewSet):
     queryset = models.File.objects.all()
     serializer_class = serializers.FileSerializer
     filter_fields = ('deleted', )
+
+    pagination_class = StandardResultsSetPagination
+
+    def dispatch(self, request, *args, **kwargs):
+        if 'rql' in request.GET:
+            mutable_get = request.GET.copy()
+            mutable_get['rql'] = re.sub(r'(%5B|%5D|%22|\[|\]|")', '', mutable_get['rql'])
+            request.GET = mutable_get
+        return super().dispatch(request, *args, **kwargs)
 
     @action(detail=False, methods=['POST'])
     def upload_many(self, request):

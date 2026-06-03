@@ -77,19 +77,3 @@ DJANGO_CONFIGURATION
     Service mode, cab be ``Production`` or ``Development``.
     ``Development`` mode has additional features enabled:
     - Swagger endpoint at  ``/swagger/``
-    
-
-ENABLE_RAVEN
-
-    Boolean flag for ``Sentry`` logging enabled ``False`` by default
-    
-
-RAVEN_CONFIG_DSN
-
-    Sentry project DSN URL to log events to
-    
-
-RAVEN_CONFIG_RELEASE
-
-    String tag for identify events sent into ``Sentry`` log
-    

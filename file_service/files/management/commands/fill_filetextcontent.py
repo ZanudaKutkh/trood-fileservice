@@ -37,7 +37,7 @@ def extract(file):
                 source=file, content=text, title=title
                 )
             set_metadata(file, True)
-        except: 
+        except Exception: 
             set_metadata(file, False)
 
 class Command(BaseCommand):

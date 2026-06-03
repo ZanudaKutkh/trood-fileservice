@@ -12,7 +12,6 @@ attrs==19.1.0
 pytest-django==3.8.0
 pytest-cov==2.8.1
 gunicorn==20.0.4
-raven==6.10.0
 teamcity-messages==1.21
 python-slugify==4.0.0
 Pillow==7.0.0
@@ -36,5 +35,8 @@ django-storages
 pytesseract==0.3.7
 pdf2image==1.16.0
 python-json-logger==2.0.2
+ruff
+mypy
+types-requests
 
 trood==1.0.6

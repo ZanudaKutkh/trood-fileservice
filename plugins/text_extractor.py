@@ -1,4 +1,3 @@
-import io
 import re
 
 import textract
@@ -70,7 +69,7 @@ class TextExtractorPlugin(TroodBasePlugin):
                     FileTextContent.objects.create(
                         source=file, content=text, title=title)
                     cls._set_metadata(file, True)
-                except:
+                except Exception:
                     cls._set_metadata(file, False)
 
     @classmethod

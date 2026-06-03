@@ -37,7 +37,7 @@ class OcrPlugin(TroodBasePlugin):
                     filename = obj.origin_filename.split('.')[0]
                     FileTextContent.objects.update_or_create(source=obj, title=filename, defaults={'content': text})
                     cls._set_metadata(obj, True)
-                except:
+                except Exception:
                     cls._set_metadata(obj, False)
 
     @classmethod

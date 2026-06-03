@@ -116,9 +116,11 @@ html_static_path = ['_static']
 htmlhelp_basename = 'trood-fileservice-doc'
 
 
+from typing import Dict, Any
+
 # -- Options for LaTeX output ------------------------------------------------
 
-latex_elements = {
+latex_elements: Dict[str, Any] = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',

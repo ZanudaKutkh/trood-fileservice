@@ -8,9 +8,6 @@ services:
     container_name: fileservice
     environment:
       DJANGO_CONFIGURATION: Development
-      RAVEN_CONFIG_DSN: "YOUR_DSN_HERE"
-      RAVEN_CONFIG_RELEASE: "dev"
-      ENABLE_RAVEN: "False"
 
   fileservice_postgres:
     image: postgres:9.5

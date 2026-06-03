@@ -317,7 +317,7 @@ class TemplatesRenderTestCase(APITestCase):
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_template_preview(self):
-        url = f'/api/v1.0/templates/preview/'
+        url = '/api/v1.0/templates/preview/'
         response = self.client.post(
             url,
             json.dumps({
@@ -331,7 +331,7 @@ class TemplatesRenderTestCase(APITestCase):
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_invalid_template_preview(self):
-        url = f'/api/v1.0/templates/preview/'
+        url = '/api/v1.0/templates/preview/'
         response = self.client.post(
             url,
             json.dumps({

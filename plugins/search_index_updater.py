@@ -1,8 +1,5 @@
-import io
-import re
 import os
 
-import textract
 from django.db.models import signals
 import requests
 
