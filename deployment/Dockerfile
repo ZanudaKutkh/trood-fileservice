@@ -44,4 +44,4 @@ COPY ./docs/_static/swagger.yml $APPDIR/static/
 COPY ./VERSION $APPDIR/
 
 EXPOSE 8000
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "--reload", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "file_service.wsgi:application"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "--reload", "-w", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "file_service.wsgi:application"]
