@@ -1,6 +1,7 @@
 import uuid
 import threading
 import logging
+import time
 
 # Thread-local storage for request ID
 _thread_locals = threading.local()
@@ -12,16 +13,18 @@ class GatekeeperLoggingMiddleware:
     """
     Middleware that stands at the very gates of Django.
     Logs every request before any auth or validation happens.
+    Now also logs the response and processing time.
     """
     def __init__(self, get_response):
         self.get_response = get_response
         self.logger = logging.getLogger('file_service.gatekeeper')
 
     def __call__(self, request):
+        start_time = time.time()
+        
         # Log incoming request details immediately
-        # We use INFO level to ensure it shows up in most configurations
         self.logger.info(
-            f"GATEKEEPER: {request.method} {request.path}",
+            f"GATEKEEPER IN: {request.method} {request.path}",
             extra={
                 "ip": request.META.get('REMOTE_ADDR'),
                 "user_agent": request.META.get('HTTP_USER_AGENT'),
@@ -31,7 +34,21 @@ class GatekeeperLoggingMiddleware:
             }
         )
         
-        return self.get_response(request)
+        response = self.get_response(request)
+        
+        duration = time.time() - start_time
+        
+        # Log outgoing response details
+        self.logger.info(
+            f"GATEKEEPER OUT: {request.method} {request.path} -> {response.status_code} ({duration:.3f}s)",
+            extra={
+                "status_code": response.status_code,
+                "duration": duration,
+                "request_id": getattr(request, 'request_id', 'no-id-yet')
+            }
+        )
+        
+        return response
 
 class RequestIDMiddleware:
     """
