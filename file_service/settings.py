@@ -48,6 +48,7 @@ class BaseConfiguration(Configuration):
     TROOD_PLUGINS_PATH = 'plugins'
 
     MIDDLEWARE = [
+        'file_service.utils.middleware.GatekeeperLoggingMiddleware',
         'file_service.utils.middleware.RequestIDMiddleware',
         'django.middleware.security.SecurityMiddleware',
         'django.contrib.sessions.middleware.SessionMiddleware',
@@ -186,22 +187,22 @@ class BaseConfiguration(Configuration):
             },
             'django.request': {
                 'handlers': ['console'],
-                'level': 'ERROR',
+                'level': 'DEBUG',
                 'propagate': False,
             },
             'django.server': {
                 'handlers': ['console'],
-                'level': 'ERROR',
+                'level': 'DEBUG',
                 'propagate': False,
             },
             'file_service': {
-                'level': 'INFO',
+                'level': 'DEBUG',
                 'handlers': ['console'],
                 'propagate': False,
             },
         },
         'root': {
-            'level': 'WARNING',
+            'level': 'INFO',
             'handlers': ['console'],
         },
     }

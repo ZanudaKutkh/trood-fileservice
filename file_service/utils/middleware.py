@@ -1,11 +1,37 @@
 import uuid
 import threading
+import logging
 
 # Thread-local storage for request ID
 _thread_locals = threading.local()
 
 def get_current_request_id():
     return getattr(_thread_locals, 'request_id', None)
+
+class GatekeeperLoggingMiddleware:
+    """
+    Middleware that stands at the very gates of Django.
+    Logs every request before any auth or validation happens.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.logger = logging.getLogger('file_service.gatekeeper')
+
+    def __call__(self, request):
+        # Log incoming request details immediately
+        # We use INFO level to ensure it shows up in most configurations
+        self.logger.info(
+            f"GATEKEEPER: {request.method} {request.path}",
+            extra={
+                "ip": request.META.get('REMOTE_ADDR'),
+                "user_agent": request.META.get('HTTP_USER_AGENT'),
+                "content_length": request.META.get('CONTENT_LENGTH'),
+                "content_type": request.META.get('CONTENT_TYPE'),
+                "request_id": request.META.get('HTTP_X_REQUEST_ID', 'no-id-yet')
+            }
+        )
+        
+        return self.get_response(request)
 
 class RequestIDMiddleware:
     """
