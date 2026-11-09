@@ -1,5 +1,6 @@
 import time
 import os
+import threading
 import logging
 import re
 from django.conf import settings
@@ -7,14 +8,12 @@ from django.db import transaction
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponseRedirect
-from django.views.decorators.clickjacking import xframe_options_exempt
-import requests
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.exceptions import ValidationError
 
-from file_service.files import models, serializers
+from file_service.files import models, preview as preview_utils, serializers
 from rest_framework.response import Response
 from django.template import Context
 from django.template import Template as DjangoTemplate
@@ -22,93 +21,6 @@ from django.template import Template as DjangoTemplate
 from rest_framework.pagination import PageNumberPagination
 
 logger = logging.getLogger('file_service')
-
-
-def _prepare_spreadsheet_for_preview(file_bytes, ext):
-    """
-    LibreOffice Calc headless export has a documented regression (tdf#169919):
-    native cell hyperlinks (<hyperlink ref="XX">) in .xlsx are rendered as plain text
-    without interactive PDF link annotations (/Subtype /Link).
-    Converting them to HYPERLINK() formulas in memory preserves working clickable links.
-    """
-    if ext != '.xlsx':
-        return file_bytes
-    try:
-        import io, zipfile, re, xml.etree.ElementTree as ET, xml.sax.saxutils as saxutils
-        in_buf = io.BytesIO(file_bytes)
-        out_buf = io.BytesIO()
-
-        with zipfile.ZipFile(in_buf, 'r') as zin, zipfile.ZipFile(out_buf, 'w') as zout:
-            rels_map = {}
-            for item in zin.infolist():
-                if item.filename.startswith('xl/worksheets/_rels/') and item.filename.endswith('.rels'):
-                    sheet_name = item.filename.replace('xl/worksheets/_rels/', 'xl/worksheets/').replace('.rels', '')
-                    tree = ET.fromstring(zin.read(item.filename))
-                    rels = {}
-                    for rel in tree:
-                        if 'hyperlink' in rel.attrib.get('Type', '').lower() and 'Target' in rel.attrib:
-                            rels[rel.attrib.get('Id')] = rel.attrib.get('Target')
-                    if rels:
-                        rels_map[sheet_name] = rels
-
-            if not rels_map:
-                return file_bytes
-
-            strings = []
-            if 'xl/sharedStrings.xml' in zin.namelist():
-                sst_tree = ET.fromstring(zin.read('xl/sharedStrings.xml'))
-                ns = {'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
-                for si in sst_tree.findall('main:si', ns):
-                    t_elem = si.find('main:t', ns)
-                    strings.append(t_elem.text if t_elem is not None else '')
-
-            for item in zin.infolist():
-                content = zin.read(item.filename)
-                if item.filename in rels_map:
-                    rels = rels_map[item.filename]
-                    xml_text = content.decode('utf-8')
-                    tree = ET.fromstring(xml_text)
-                    ns = {'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
-                    hls = tree.findall('.//main:hyperlink', ns)
-
-                    cell_fixes = {}
-                    for hl in hls:
-                        ref = hl.attrib.get('ref')
-                        r_id = hl.attrib.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
-                        target = rels.get(r_id)
-                        if ref and target:
-                            c_elem = tree.find(f'.//main:c[@r="{ref}"]', ns)
-                            display = target
-                            if c_elem is not None:
-                                t_attr = c_elem.attrib.get('t')
-                                v_elem = c_elem.find('main:v', ns)
-                                if v_elem is not None and v_elem.text:
-                                    if t_attr == 's' and v_elem.text.isdigit():
-                                        idx = int(v_elem.text)
-                                        if idx < len(strings):
-                                            display = strings[idx] or target
-                                    else:
-                                        display = v_elem.text
-                            cell_fixes[ref] = (target, display)
-
-                    for ref, (target, display) in cell_fixes.items():
-                        f_target = target.replace('"', '""')
-                        f_display = display.replace('"', '""')
-                        formula_text = f'HYPERLINK("{f_target}", "{f_display}")'
-                        xml_formula = saxutils.escape(formula_text)
-                        xml_display = saxutils.escape(display)
-
-                        pattern = rf'<c\s+r="{ref}"[^>]*>.*?</c>'
-                        repl = f'<c r="{ref}" t="str"><f>{xml_formula}</f><v>{xml_display}</v></c>'
-                        xml_text = re.sub(pattern, repl, xml_text)
-
-                    content = xml_text.encode('utf-8')
-                zout.writestr(item, content)
-
-        return out_buf.getvalue()
-    except Exception as e:
-        logger.warning("Failed to preprocess xlsx hyperlinks: %s", e)
-        return file_bytes
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -235,81 +147,64 @@ class FilesViewSet(BaseViewSet):
         )
 
     @action(detail=True, methods=['GET'])
-    @xframe_options_exempt
     def preview(self, request, pk=None):
+        """Redirect to a PDF rendition of the file (PDF/images are served as is)."""
         file_obj = get_object_or_404(models.File, pk=pk)
 
-        # 1. Если это PDF или изображение — отдаем оригинальную ссылку сразу
         if file_obj.mimetype == 'application/pdf' or (file_obj.type and file_obj.type.id in ('PDF', 'IMAGE')):
             return HttpResponseRedirect(file_obj.file_url)
 
-        # 2. Проверяем кэш готовых превью
+        ext = preview_utils.guess_extension(
+            file_obj.origin_filename, file_obj.filename, file_obj.file.name, mimetype=file_obj.mimetype)
+        if not ext:
+            return self._preview_error('Preview is not supported for this file type',
+                                       status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
         preview_dir = os.path.join(settings.MEDIA_ROOT, 'previews')
         os.makedirs(preview_dir, exist_ok=True)
         preview_filename = f"{file_obj.id}.pdf"
         preview_path = os.path.join(preview_dir, preview_filename)
-        preview_url = f"{settings.FILES_BASE_URL}previews/{preview_filename}"
 
         if not os.path.exists(preview_path):
-            file_bytes = None
             try:
-                if hasattr(file_obj.file, 'path') and os.path.exists(file_obj.file.path):
-                    with open(file_obj.file.path, 'rb') as f:
-                        file_bytes = f.read()
-                elif hasattr(file_obj.file, 'storage') and file_obj.file.storage.exists(file_obj.file.name):
-                    with file_obj.file.open('rb') as f:
-                        file_bytes = f.read()
-                else:
-                    try:
-                        with file_obj.file.open('rb') as f:
-                            file_bytes = f.read()
-                    except (FileNotFoundError, OSError, ValueError):
-                        file_bytes = None
-            except Exception as e:
+                with file_obj.file.open('rb') as f:
+                    file_bytes = f.read(preview_utils.PREVIEW_MAX_BYTES + 1)
+            except (FileNotFoundError, OSError, ValueError) as e:
                 logger.warning("Could not read original file %s: %s", pk, e)
-                file_bytes = None
+                return self._preview_error('Original file not found on storage', status.HTTP_404_NOT_FOUND)
+            if len(file_bytes) > preview_utils.PREVIEW_MAX_BYTES:
+                return self._preview_error('File is too large for preview',
+                                           status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
 
-            if not file_bytes:
-                return Response({
-                    "status": "ERROR",
-                    "message": "Original file not found on storage"
-                }, status=status.HTTP_404_NOT_FOUND)
-
+            upload_name = f"{file_obj.id}{ext}"
             try:
-                upload_name = file_obj.origin_filename or file_obj.filename or f"doc_{file_obj.id}.docx"
-                post_data = {}
-                ext = os.path.splitext(upload_name)[1].lower()
-                if ext in ('.xlsx', '.xls', '.ods', '.csv', '.tsv'):
-                    post_data['singlePageSheets'] = 'true'
-                    file_bytes = _prepare_spreadsheet_for_preview(file_bytes, ext)
-
-                resp = requests.post(
-                    "http://gotenberg:3000/forms/libreoffice/convert",
-                    files={"files": (upload_name, file_bytes)},
-                    data=post_data,
-                    timeout=60
-                )
-                if resp.status_code == 200:
-                    tmp_preview_path = f"{preview_path}.tmp.{os.getpid()}"
-                    with open(tmp_preview_path, 'wb') as out_f:
-                        out_f.write(resp.content)
-                    os.replace(tmp_preview_path, preview_path)
-                else:
-                    logger.error("Gotenberg conversion failed for %s: %s", pk, resp.text)
-                    return Response({
-                        "status": "ERROR",
-                        "message": f"Gotenberg conversion failed: {resp.text}"
-                    }, status=status.HTTP_502_BAD_GATEWAY)
-            except Exception as e:
+                pdf = preview_utils.convert_to_pdf(upload_name, file_bytes, ext)
+            except preview_utils.PreviewBusy:
+                response = self._preview_error('Preview service is busy, try again later',
+                                               status.HTTP_503_SERVICE_UNAVAILABLE)
+                response['Retry-After'] = '5'
+                return response
+            except preview_utils.PreviewError as e:
+                logger.error("Preview conversion failed for file %s: %s", pk, e)
+                return self._preview_error('Preview conversion failed', status.HTTP_502_BAD_GATEWAY)
+            except Exception:
                 logger.exception("Preview generation failed for file %s", pk)
-                return Response({
-                    "status": "ERROR",
-                    "message": f"Preview generation error: {str(e)}"
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return self._preview_error('Preview generation failed', status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        response = HttpResponseRedirect(preview_url)
-        response['X-Frame-Options'] = 'SAMEORIGIN'
-        return response
+            tmp_path = f"{preview_path}.tmp.{os.getpid()}.{threading.get_ident()}"
+            try:
+                with open(tmp_path, 'wb') as out_f:
+                    out_f.write(pdf)
+                os.replace(tmp_path, preview_path)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+
+        return HttpResponseRedirect(f"{settings.FILES_BASE_URL}previews/{preview_filename}")
+
+    @staticmethod
+    def _preview_error(message, http_status):
+        return Response({"status": "ERROR", "message": message}, status=http_status)
 
     def perform_destroy(self, instance):
         """
